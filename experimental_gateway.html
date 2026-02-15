@@ -1,0 +1,1993 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>实验站点接入</title>
+  <style>
+    :root {
+      --bg: #000;
+      --ink: #f2f2f2;
+      --muted: #b8b8b8;
+      --line: rgba(255, 255, 255, 0.32);
+      --line-strong: rgba(255, 255, 255, 0.56);
+      --ok: #39ff94;
+      --err: #ff5f5f;
+      --glass: rgba(0, 0, 0, 0.38);
+      --glass-strong: rgba(0, 0, 0, 0.58);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "SF Pro SC", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0.01em;
+    }
+
+    .app {
+      position: fixed;
+      inset: 0;
+      background: #000;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+    }
+
+    .time-bar {
+      position: fixed;
+      top: 12px;
+      right: 14px;
+      min-height: 18px;
+      min-width: 180px;
+      max-width: min(60vw, 420px);
+      display: block;
+      padding: 0;
+      font-size: 13px;
+      line-height: 1.4;
+      text-align: right;
+      text-shadow: 0 0 6px rgba(0, 0, 0, 0.88);
+      z-index: 12;
+      opacity: 0;
+      transform: translateY(-3px);
+      filter: blur(1.2px);
+      transition: opacity 1.05s ease, transform 1.05s ease, filter 1.05s ease;
+      pointer-events: none;
+    }
+
+    .time-bar.show {
+      opacity: 1;
+      transform: translateY(0);
+      filter: blur(0);
+    }
+
+    .composer-toggle {
+      position: fixed;
+      left: 14px;
+      bottom: 12px;
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line-strong);
+      background: transparent;
+      border-radius: 999px;
+      cursor: pointer;
+      z-index: 22;
+      padding: 0;
+    }
+
+    .composer-toggle::before {
+      content: "↑";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -56%);
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1;
+      color: #fff;
+      opacity: 0.92;
+    }
+
+    .composer-panel {
+      position: fixed;
+      left: 14px;
+      bottom: 56px;
+      width: min(92vw, 360px);
+      border: none;
+      background: transparent;
+      backdrop-filter: none;
+      padding: 0;
+      z-index: 20;
+      display: grid;
+      gap: 8px;
+      opacity: 0;
+      transform: translateY(12px) scale(0.965);
+      transform-origin: left bottom;
+      pointer-events: none;
+      transition: opacity 0.36s cubic-bezier(0.2, 0.72, 0.2, 1), transform 0.36s cubic-bezier(0.2, 0.72, 0.2, 1);
+    }
+
+    .composer-panel.open {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .panel-title {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 7px;
+      align-items: center;
+    }
+
+    .ghost-btn,
+    .mini-btn {
+      background: transparent;
+      color: #fff;
+      border: 1px solid var(--line-strong);
+      height: 0.5cm;
+      min-width: 1.75cm;
+      padding: 0 0.2cm;
+      font-size: 11px;
+      line-height: 1;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .ghost-btn:hover,
+    .mini-btn:hover {
+      border-color: #fff;
+    }
+
+    .mini-btn:disabled,
+    .ghost-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .text-input {
+      width: 100%;
+      height: 0.5cm;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: #fff;
+      font-size: 12px;
+      padding: 0 8px;
+      outline: none;
+    }
+
+    .text-input:focus {
+      border-color: #fff;
+    }
+
+    .drop-zone {
+      border: 1px dashed var(--line-strong);
+      background: transparent;
+      color: #f0f0f0;
+      min-height: 44px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: pointer;
+      padding: 7px;
+    }
+
+    .drop-zone.dragover {
+      border-color: #fff;
+    }
+
+    .files {
+      border: 1px solid var(--line);
+      background: transparent;
+      margin: 0;
+      padding: 6px 8px;
+      list-style: none;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #f0f0f0;
+      max-height: 132px;
+      overflow: auto;
+    }
+
+    .files li + li {
+      margin-top: 3px;
+    }
+
+    .status {
+      min-height: 18px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .status.ok {
+      color: var(--ok);
+    }
+
+    .status.err {
+      color: var(--err);
+    }
+
+    .notice-toggle {
+      position: fixed;
+      right: 14px;
+      bottom: 12px;
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line-strong);
+      background: transparent;
+      border-radius: 999px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      z-index: 22;
+      opacity: 1;
+      transform: scale(1);
+      transition: opacity 0.22s ease, transform 0.22s ease;
+    }
+
+    .notice-toggle.auto-hide {
+      opacity: 0;
+      transform: scale(0.9);
+      pointer-events: none;
+    }
+
+    .notice-panel {
+      position: fixed;
+      right: 14px;
+      bottom: 56px;
+      width: min(94vw, 420px);
+      max-height: min(74vh, 620px);
+      overflow: auto;
+      border: none;
+      background: transparent;
+      backdrop-filter: none;
+      padding: 0;
+      z-index: 21;
+    }
+
+    .notice-text {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.75;
+      color: #ececec;
+      text-align: justify;
+      text-shadow: 0 0 7px rgba(0, 0, 0, 0.9);
+    }
+
+    .ports-toggle {
+      position: fixed;
+      right: 14px;
+      bottom: 12px;
+      min-width: 78px;
+      height: 34px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: transparent;
+      color: #f2f2f2;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      z-index: 30;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(10px) scale(0.94);
+      transition: opacity 0.34s cubic-bezier(0.2, 0.72, 0.2, 1), transform 0.34s cubic-bezier(0.2, 0.72, 0.2, 1);
+    }
+
+    .ports-panel {
+      position: fixed;
+      right: 14px;
+      bottom: 56px;
+      width: min(94vw, 350px);
+      max-height: min(62vh, 520px);
+      padding: 10px 10px 8px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.58);
+      backdrop-filter: blur(8px);
+      overflow: hidden;
+      z-index: 31;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(20px) scale(0.86);
+      transform-origin: right bottom;
+      filter: blur(1.6px);
+      transition: opacity 0.34s cubic-bezier(0.2, 0.72, 0.2, 1), transform 0.34s cubic-bezier(0.2, 0.72, 0.2, 1), filter 0.34s cubic-bezier(0.2, 0.72, 0.2, 1);
+    }
+
+    .ports-panel.open {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+
+    .ports-title {
+      margin: 0 0 5px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #f0f0f0;
+    }
+
+    .ports-sub {
+      margin: 0 0 8px;
+      font-size: 11px;
+      color: #c5c5c5;
+    }
+
+    .ports-net-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+      max-height: min(48vh, 380px);
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .ports-net-btn {
+      width: 100%;
+      text-align: left;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: transparent;
+      color: #e8e8e8;
+      font-size: 11px;
+      padding: 6px 8px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: border-color 0.2s ease, transform 0.2s ease, color 0.2s ease;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .ports-net-btn:hover {
+      border-color: rgba(255, 255, 255, 0.38);
+    }
+
+    .ports-net-btn.active {
+      border-color: rgba(255, 255, 255, 0.52);
+      color: #fff;
+      transform: translateX(1px);
+    }
+
+    .port-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      margin-right: 6px;
+      transform: translateY(-0.5px);
+    }
+
+    .app.port-mode .composer-toggle,
+    .app.port-mode .composer-panel,
+    .app.port-mode .notice-toggle,
+    .app.port-mode .notice-panel {
+      opacity: 0 !important;
+      pointer-events: none !important;
+      transform: translateY(10px) scale(0.94) !important;
+    }
+
+    .app.port-mode .ports-toggle {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+    }
+
+    @media (max-width: 720px) {
+      .composer-panel {
+        width: min(95vw, 340px);
+      }
+
+      .status,
+      .text-input,
+      .drop-zone,
+      .files,
+      .notice-text,
+      .ports-sub,
+      .ports-net-btn {
+        font-size: 11px;
+      }
+
+      .ports-title {
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div id="map"></div>
+    <div id="timeBar" class="time-bar">正在初始化地球模型...</div>
+
+    <button id="composerToggle" class="composer-toggle" type="button" aria-label="打开发送窗口"></button>
+    <section id="composerPanel" class="composer-panel" aria-label="发送窗口">
+      <h2 class="panel-title">发送窗口</h2>
+
+      <div class="row">
+        <button id="textToggleBtn" class="ghost-btn" type="button">输入文本</button>
+        <input id="messageInput" class="text-input hidden" type="text" placeholder="输入文本内容..." />
+      </div>
+
+      <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="上传文件">点击或拖拽上传文件</div>
+      <input id="fileInput" type="file" multiple class="hidden" />
+      <ul id="fileList" class="files hidden"></ul>
+
+      <button id="sendBtn" class="mini-btn" disabled>发送</button>
+      <div id="statusText" class="status">等待定位完成后可发送。</div>
+    </section>
+
+    <button id="noticeToggle" class="notice-toggle auto-hide" type="button" aria-label="打开说明">!</button>
+    <section id="noticePanel" class="notice-panel hidden" aria-label="实验站点接入说明">
+      <p class="notice-text">
+        本网站由庞兔[庞*博]PGB作为主要开发者。主要的实际作用为测试端口部署时的稳定性，所以本网站为实验网站，如您是开发者除外的人员，请不要在此处停留。当前页面为系统接入说明层，用于在访问主功能前确认测试边界与运行条件。本项目采用前端交互层、工程服务层与存储层分离的实验架构，工程端请求经网关路由后进入应用服务，服务侧完成会话校验、字段规范化与日志采样，再将必要数据写入持久化介质。在部署流程中，构建产物会先进入预发布节点进行端口连通测试、健康检查与资源校验；监控侧同步采集请求延迟、错误码分布、内存占用与异常堆栈，用于判断版本是否满足上线阈值。若检测到跨域配置异常、证书握手失败或连接池饱和，系统将触发限流与回滚策略，确保实验环境可恢复。为降低调试阶段的数据泄露风险，传输链路按安全通道处理，并对关键标识执行最小化存储策略。页面统计结果属于实验估算值，可能受端口映射、客户端时钟、浏览器缓存策略与网络抖动影响。继续访问即代表您已知悉：本站优先保障部署验证、回归对照与故障定位，不承诺生产级可用性。
+      </p>
+    </section>
+
+    <button id="portsToggleBtn" class="ports-toggle" type="button" aria-label="其他端口">其他端口</button>
+    <section id="portsPanel" class="ports-panel" aria-label="其他端口控制">
+      <h3 class="ports-title">其他端口</h3>
+      <div id="portsGrid" class="ports-net-grid" aria-label="端口列表"></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+  <script>
+    const timeBar = document.getElementById("timeBar");
+    const composerToggle = document.getElementById("composerToggle");
+    const composerPanel = document.getElementById("composerPanel");
+    const textToggleBtn = document.getElementById("textToggleBtn");
+    const messageInput = document.getElementById("messageInput");
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+    const fileList = document.getElementById("fileList");
+    const sendBtn = document.getElementById("sendBtn");
+    const statusText = document.getElementById("statusText");
+    const noticeToggle = document.getElementById("noticeToggle");
+    const noticePanel = document.getElementById("noticePanel");
+    const appRoot = document.querySelector(".app");
+    const portsToggleBtn = document.getElementById("portsToggleBtn");
+    const portsPanel = document.getElementById("portsPanel");
+    const portsGrid = document.getElementById("portsGrid");
+    const DROP_ZONE_DEFAULT_TEXT = "点击或拖拽上传文件";
+    const SEND_HOVER_REDIRECT_URL = "https://github.com/agc20110910-arch/agc20110910-arch.github.io";
+
+    const MIN_GLOBE_ZOOM = 0.52;
+    const NORMAL_GLOBE_ZOOM = 1;
+
+    const state = {
+      map: null,
+      worldCountries: null,
+      worldLand: null,
+      userPoint: null,
+      serverPoint: null,
+      serverCandidates: [],
+      routeCoords: [],
+      routeMode: "idle",
+      routeProgress: 0,
+      routeAnim: null,
+      viewAnim: null,
+      sendHoverTimer: null,
+      timeHideTimer: null,
+      noticeHoverTimer: null,
+      noticeZoneActive: false,
+      noticeIconVisible: false,
+      isAnimatingIntro: false,
+      trafficAnim: null,
+      trafficPulse: 0,
+      trafficPackets: [],
+      networkServers: {},
+      networkServerById: new Map(),
+      ownedServers: [],
+      userRejectUntil: 0,
+      portMode: false,
+      portsPanelOpen: false,
+      networkEnabled: {},
+      selectedFiles: []
+    };
+
+    const portColorPalette = [
+      [93, 142, 203], [122, 166, 220], [102, 185, 201], [125, 196, 176], [146, 166, 196],
+      [165, 176, 200], [139, 183, 227], [152, 199, 217], [126, 179, 154], [179, 191, 210]
+    ];
+    const portNameCatalog = [
+      "国盾主干交换口", "Aegis认证网关口", "北辰密钥分发口", "Sentinel链路校验口", "蓝穹多域路由口",
+      "Helios边界防护口", "苍穹骨干汇聚口", "Skylink审计回放口", "Atlas区域调度口", "Lattice零信任隧道口",
+      "Meridian时序校准口", "Aurora策略发布口", "Chronicle日志镜像口", "Replica-X数据回放口", "白塔快照复制口",
+      "Prism备份分发口", "Echo异地镜像口", "Archive-H冷备口", "Quartz只读检索口", "Nimbus索引重建口",
+      "银杉审计留存口", "Mirror-S南区同步口", "Replica-11归档口", "Vertex联邦中继口", "Polar策略接入口",
+      "Halo服务编排口", "Delta网格分发口", "Harbor跨区联动口", "Nova节点广播口", "Flux弹性调度口",
+      "Ridge边缘上报口", "Traverse网格传输口", "Drift地域联接口", "Kite低时延通道口", "Beacon事件通知口",
+      "Pulse主链保障口", "Orion应急回传口", "Crown控制回执口", "Vector跨域回路口", "Helm主站上报口",
+      "Astra优先调度口", "Argent核心响应口", "Cascade吞吐整形口", "Nebula片区联控口", "ArcLight路由冗余口",
+      "Eon同步检查口", "Glacier流控保障口", "Monolith会话桥接口"
+    ];
+    const networkDefs = portNameCatalog.map((name, index) => {
+      const color = portColorPalette[index % portColorPalette.length];
+      return {
+        key: `port${String(index + 1).padStart(2, "0")}`,
+        name,
+        color,
+        radius: 1.35 + (index % 3) * 0.1,
+        ratio: 1,
+        userProbeRate: 0.012 + (index % 5) * 0.002
+      };
+    });
+    const networkDefByKey = new Map(networkDefs.map((item) => [item.key, item]));
+    for (const def of networkDefs) {
+      state.networkEnabled[def.key] = false;
+    }
+
+    const countryLabels = [
+      { name: "United States", lat: 39.6, lon: -98.5 },
+      { name: "Canada", lat: 56.2, lon: -106.3 },
+      { name: "Mexico", lat: 23.7, lon: -102.5 },
+      { name: "Brazil", lat: -10.0, lon: -52.9 },
+      { name: "Argentina", lat: -38.4, lon: -63.6 },
+      { name: "Chile", lat: -30.0, lon: -71.0 },
+      { name: "United Kingdom", lat: 54.8, lon: -2.8 },
+      { name: "Ireland", lat: 53.3, lon: -8.0 },
+      { name: "France", lat: 46.2, lon: 2.2 },
+      { name: "Spain", lat: 40.3, lon: -3.7 },
+      { name: "Germany", lat: 51.0, lon: 10.2 },
+      { name: "Italy", lat: 42.8, lon: 12.6 },
+      { name: "Poland", lat: 52.0, lon: 19.4 },
+      { name: "Ukraine", lat: 49.0, lon: 31.4 },
+      { name: "Turkey", lat: 39.0, lon: 35.2 },
+      { name: "Russia", lat: 61.5, lon: 95.3 },
+      { name: "Saudi Arabia", lat: 24.1, lon: 45.0 },
+      { name: "Egypt", lat: 26.8, lon: 30.8 },
+      { name: "Nigeria", lat: 9.1, lon: 8.6 },
+      { name: "South Africa", lat: -30.6, lon: 22.9 },
+      { name: "India", lat: 22.5, lon: 79.0 },
+      { name: "China", lat: 35.9, lon: 104.2 },
+      { name: "Mongolia", lat: 46.9, lon: 103.8 },
+      { name: "Japan", lat: 36.2, lon: 138.3 },
+      { name: "South Korea", lat: 36.5, lon: 127.9 },
+      { name: "Thailand", lat: 15.8, lon: 101.0 },
+      { name: "Vietnam", lat: 15.9, lon: 108.3 },
+      { name: "Indonesia", lat: -2.4, lon: 118.0 },
+      { name: "Australia", lat: -25.3, lon: 133.8 },
+      { name: "New Zealand", lat: -41.0, lon: 174.0 }
+    ];
+
+    const usServerPool = [
+      [47.61, -122.33], [45.52, -122.68], [37.77, -122.42], [37.34, -121.89], [34.05, -118.24],
+      [32.72, -117.16], [36.17, -115.14], [33.45, -112.07], [39.74, -104.99], [40.76, -111.89],
+      [32.78, -96.8], [29.76, -95.37], [30.27, -97.74], [39.1, -94.58], [44.98, -93.27],
+      [41.88, -87.63], [42.33, -83.05], [33.75, -84.39], [25.76, -80.19], [35.23, -80.84],
+      [38.91, -77.04], [39.29, -76.61], [40.71, -74.0], [42.36, -71.06], [39.95, -75.16],
+      [36.16, -86.78], [29.95, -90.07], [43.04, -87.91], [35.08, -106.65], [27.95, -82.46]
+    ];
+
+    const globalServerRegions = [
+      { latMin: 24, latMax: 58, lonMin: -130, lonMax: -62, weight: 1.35 },
+      { latMin: 14, latMax: 33, lonMin: -118, lonMax: -80, weight: 0.72 },
+      { latMin: -54, latMax: 13, lonMin: -82, lonMax: -34, weight: 1.05 },
+      { latMin: 36, latMax: 64, lonMin: -12, lonMax: 40, weight: 1.25 },
+      { latMin: -34, latMax: 36, lonMin: -20, lonMax: 52, weight: 0.92 },
+      { latMin: 5, latMax: 42, lonMin: 40, lonMax: 90, weight: 0.9 },
+      { latMin: -8, latMax: 33, lonMin: 68, lonMax: 96, weight: 1.15 },
+      { latMin: -12, latMax: 44, lonMin: 96, lonMax: 146, weight: 1.35 },
+      { latMin: -46, latMax: -10, lonMin: 110, lonMax: 179, weight: 0.66 }
+    ];
+
+    function setStatus(message, type = "") {
+      statusText.textContent = message;
+      statusText.className = "status";
+      if (type) statusText.classList.add(type);
+    }
+
+    function hideTime() {
+      if (state.timeHideTimer) {
+        clearTimeout(state.timeHideTimer);
+        state.timeHideTimer = null;
+      }
+      timeBar.classList.remove("show");
+    }
+
+    function clearNoticeHoverTimer() {
+      if (state.noticeHoverTimer) {
+        clearTimeout(state.noticeHoverTimer);
+        state.noticeHoverTimer = null;
+      }
+    }
+
+    function clearSendHoverTimer() {
+      if (state.sendHoverTimer) {
+        clearTimeout(state.sendHoverTimer);
+        state.sendHoverTimer = null;
+      }
+    }
+
+    function setNoticeIconVisible(visible) {
+      state.noticeIconVisible = visible;
+      noticeToggle.classList.toggle("auto-hide", !visible);
+    }
+
+    function setPortsPanelOpen(open) {
+      state.portsPanelOpen = open;
+      portsPanel.classList.toggle("open", open);
+    }
+
+    function renderPortNames() {
+      if (!portsGrid) return;
+      portsGrid.innerHTML = networkDefs
+        .map((def) => {
+          const active = state.networkEnabled[def.key] ? " active" : "";
+          const [r, g, b] = def.color;
+          return `<button class="ports-net-btn${active}" type="button" data-net="${def.key}" title="${def.name}"><i class="port-dot" style="background:rgb(${r},${g},${b})"></i>${def.name}</button>`;
+        })
+        .join("");
+    }
+
+    function setPortMode(active) {
+      state.portMode = active;
+      appRoot.classList.toggle("port-mode", active);
+
+      if (active) {
+        composerPanel.classList.remove("open");
+        noticePanel.classList.add("hidden");
+        clearNoticeHoverTimer();
+        state.noticeZoneActive = false;
+        setNoticeIconVisible(false);
+        setPortsPanelOpen(false);
+        renderPortNames();
+
+        if (state.map) {
+          const center = state.map.projection.invert([state.map.width / 2, state.map.height / 2]);
+          if (center) {
+            rotateToCoordinate(center[1], center[0], 820, MIN_GLOBE_ZOOM);
+          } else {
+            state.map.zoom = MIN_GLOBE_ZOOM;
+            state.map.projection.scale(state.map.baseScale * state.map.zoom);
+            drawGlobe();
+          }
+        }
+        return;
+      }
+
+      setPortsPanelOpen(false);
+    }
+
+    function togglePortMode() {
+      setPortMode(!state.portMode);
+    }
+
+    function showTime(message, duration = 3800) {
+      if (state.timeHideTimer) {
+        clearTimeout(state.timeHideTimer);
+        state.timeHideTimer = null;
+      }
+      timeBar.textContent = message;
+      timeBar.classList.add("show");
+      if (duration > 0) {
+        state.timeHideTimer = setTimeout(() => {
+          timeBar.classList.remove("show");
+          state.timeHideTimer = null;
+        }, duration);
+      }
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function wrapLon(lon) {
+      let out = lon;
+      while (out > 180) out -= 360;
+      while (out < -180) out += 360;
+      return out;
+    }
+
+    function shortestLonDelta(fromLon, toLon) {
+      let delta = toLon - fromLon;
+      while (delta > 180) delta -= 360;
+      while (delta < -180) delta += 360;
+      return delta;
+    }
+
+    function easeInOut(t) {
+      if (t < 0.5) return 2 * t * t;
+      return 1 - Math.pow(-2 * t + 2, 2) / 2;
+    }
+
+    function easeSmoother(t) {
+      const x = clamp(t, 0, 1);
+      return x * x * x * (x * (x * 6 - 15) + 10);
+    }
+
+    function smoothStepRange(start, end, t) {
+      if (end <= start) return t >= end ? 1 : 0;
+      const x = clamp((t - start) / (end - start), 0, 1);
+      return x * x * (3 - 2 * x);
+    }
+
+    function createSpeedProfile(segmentCount = 14) {
+      const weights = Array.from({ length: segmentCount }, () => 0.45 + Math.random() * 1.9);
+      const cumulative = [0];
+      for (let i = 0; i < segmentCount; i += 1) {
+        cumulative.push(cumulative[i] + weights[i]);
+      }
+      const total = cumulative[cumulative.length - 1] || 1;
+
+      return (t) => {
+        const normalized = clamp(t, 0, 1);
+        const raw = normalized * segmentCount;
+        const index = Math.min(segmentCount - 1, Math.floor(raw));
+        const local = raw - index;
+        const from = cumulative[index] / total;
+        const to = cumulative[index + 1] / total;
+        return from + (to - from) * local;
+      };
+    }
+
+    function haversineKm(a, b) {
+      const toRad = (d) => (d * Math.PI) / 180;
+      const lat1 = toRad(a[0]);
+      const lat2 = toRad(b[0]);
+      const dLat = toRad(b[0] - a[0]);
+      const dLon = toRad(b[1] - a[1]);
+      const h =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+    }
+
+    function generateServerCandidates(count = 24) {
+      if (state.ownedServers.length) {
+        const shuffledOwned = [...state.ownedServers].sort(() => Math.random() - 0.5);
+        return shuffledOwned.slice(0, count).map((server) => [server.lat, server.lon]);
+      }
+      const shuffled = [...usServerPool].sort(() => Math.random() - 0.5);
+      return shuffled.slice(0, count).map(([lat, lon]) => [lat + (Math.random() - 0.5) * 0.45, lon + (Math.random() - 0.5) * 0.45]);
+    }
+
+    function chooseBestServer(userPoint, candidates) {
+      if (!userPoint || !candidates.length) return null;
+      let best = candidates[0];
+      let bestScore = Infinity;
+      for (const candidate of candidates) {
+        const score = haversineKm(userPoint, candidate) * (0.95 + Math.random() * 0.1);
+        if (score < bestScore) {
+          bestScore = score;
+          best = candidate;
+        }
+      }
+      return best;
+    }
+
+    async function initMap() {
+      if (state.map) return;
+
+      const container = document.getElementById("map");
+      const canvas = document.createElement("canvas");
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+      canvas.style.display = "block";
+      canvas.style.cursor = "grab";
+      container.innerHTML = "";
+      container.appendChild(canvas);
+
+      const ctx = canvas.getContext("2d");
+      const projection = d3.geoOrthographic().clipAngle(90).precision(0.3);
+      const path = d3.geoPath(projection, ctx);
+
+      state.map = {
+        container,
+        canvas,
+        ctx,
+        projection,
+        path,
+        sphere: { type: "Sphere" },
+        graticule: d3.geoGraticule10(),
+        rotation: [96, -18],
+        resizeObserver: null,
+        width: 0,
+        height: 0,
+        baseScale: 0,
+        zoom: MIN_GLOBE_ZOOM
+      };
+
+      bindGlobeDrag();
+      bindGlobeZoom();
+
+      const sources = [
+        "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json",
+        "https://unpkg.com/world-atlas@2/countries-110m.json"
+      ];
+
+      for (const source of sources) {
+        try {
+          const response = await fetch(source, { cache: "force-cache" });
+          if (!response.ok) continue;
+          const topo = await response.json();
+          if (topo && topo.objects) {
+            if (topo.objects.countries) state.worldCountries = topojson.feature(topo, topo.objects.countries);
+            if (topo.objects.land) state.worldLand = topojson.feature(topo, topo.objects.land);
+            if (state.worldCountries || state.worldLand) break;
+          }
+        } catch (error) {
+          // Try next mirror.
+        }
+      }
+
+      initNetworkTopology();
+      state.map.resizeObserver = new ResizeObserver(() => resizeGlobe());
+      state.map.resizeObserver.observe(container);
+      resizeGlobe();
+      startTrafficLoop();
+    }
+
+    function bindGlobeDrag() {
+      const { canvas, projection } = state.map;
+      let dragging = false;
+      let lastX = 0;
+      let lastY = 0;
+      let downX = 0;
+      let downY = 0;
+      let moved = false;
+      let lastTapTs = 0;
+      let lastTapX = 0;
+      let lastTapY = 0;
+
+      canvas.addEventListener("pointerdown", (event) => {
+        dragging = true;
+        lastX = event.clientX;
+        lastY = event.clientY;
+        downX = event.clientX;
+        downY = event.clientY;
+        moved = false;
+        canvas.style.cursor = "grabbing";
+        canvas.setPointerCapture(event.pointerId);
+      });
+
+      canvas.addEventListener("pointermove", (event) => {
+        if (!dragging) return;
+        if (!moved && (Math.abs(event.clientX - downX) > 4 || Math.abs(event.clientY - downY) > 4)) {
+          moved = true;
+        }
+        const dx = event.clientX - lastX;
+        const dy = event.clientY - lastY;
+        lastX = event.clientX;
+        lastY = event.clientY;
+
+        state.map.rotation[0] = wrapLon(state.map.rotation[0] + dx * 0.32);
+        state.map.rotation[1] = clamp(state.map.rotation[1] - dy * 0.32, -89, 89);
+        projection.rotate([state.map.rotation[0], state.map.rotation[1], 0]);
+        drawGlobe();
+      });
+
+      const stopDrag = (event, allowTap = false) => {
+        if (!dragging) return;
+        const wasMoved = moved;
+        dragging = false;
+        moved = false;
+        canvas.style.cursor = "grab";
+        try {
+          canvas.releasePointerCapture(event.pointerId);
+        } catch (error) {
+          // Ignore non-captured pointer release.
+        }
+
+        if (!allowTap || wasMoved) return;
+        const now = performance.now();
+        const dxTap = event.clientX - lastTapX;
+        const dyTap = event.clientY - lastTapY;
+        if (now - lastTapTs <= 360 && dxTap * dxTap + dyTap * dyTap <= 196) {
+          lastTapTs = 0;
+          togglePortMode();
+          return;
+        }
+        lastTapTs = now;
+        lastTapX = event.clientX;
+        lastTapY = event.clientY;
+      };
+
+      canvas.addEventListener("pointerup", (event) => stopDrag(event, true));
+      canvas.addEventListener("pointercancel", (event) => stopDrag(event));
+      canvas.addEventListener("pointerleave", (event) => {
+        if ((event.buttons & 1) === 0) stopDrag(event);
+      });
+    }
+
+    function bindGlobeZoom() {
+      const { canvas, projection } = state.map;
+      canvas.addEventListener(
+        "wheel",
+        (event) => {
+          event.preventDefault();
+          const factor = event.deltaY < 0 ? 1.09 : 0.91;
+          state.map.zoom = clamp(state.map.zoom * factor, MIN_GLOBE_ZOOM, 3.2);
+          projection.scale(state.map.baseScale * state.map.zoom);
+          drawGlobe();
+          if (state.map.zoom > 1.08) hideTime();
+        },
+        { passive: false }
+      );
+    }
+
+    function resizeGlobe() {
+      if (!state.map) return;
+      const { container, canvas, ctx, projection, rotation } = state.map;
+      const rect = container.getBoundingClientRect();
+      const width = Math.max(10, rect.width);
+      const height = Math.max(10, rect.height);
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.7);
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      state.map.width = width;
+      state.map.height = height;
+      state.map.baseScale = Math.min(width, height) * 0.45;
+      projection
+        .translate([width / 2, height / 2])
+        .scale(state.map.baseScale * state.map.zoom)
+        .rotate([rotation[0], rotation[1], 0]);
+
+      initNetworkTopology(true);
+      drawGlobe();
+    }
+
+    function pickWeightedRegion() {
+      const total = globalServerRegions.reduce((sum, region) => sum + region.weight, 0);
+      let ticket = Math.random() * total;
+      for (const region of globalServerRegions) {
+        ticket -= region.weight;
+        if (ticket <= 0) return region;
+      }
+      return globalServerRegions[globalServerRegions.length - 1];
+    }
+
+    function randomRegionCoord() {
+      const region = pickWeightedRegion();
+      const lat = region.latMin + Math.random() * (region.latMax - region.latMin);
+      const lon = region.lonMin + Math.random() * (region.lonMax - region.lonMin);
+      return [lat, lon];
+    }
+
+    function generateServersForNetwork(def, count = 360) {
+      const servers = [];
+      const land = state.worldLand || state.worldCountries;
+      let attempts = 0;
+
+      while (servers.length < count && attempts < count * 28) {
+        attempts += 1;
+        const [lat, lon] = randomRegionCoord();
+        if (land && !d3.geoContains(land, [lon, lat])) continue;
+        servers.push({ id: `${def.key}-${servers.length}`, key: def.key, lat, lon });
+      }
+
+      while (servers.length < count) {
+        const [lat, lon] = randomRegionCoord();
+        servers.push({ id: `${def.key}-${servers.length}`, key: def.key, lat, lon });
+      }
+
+      return servers;
+    }
+
+    function initNetworkTopology(force = false) {
+      if (!state.map) return;
+      if (!force && Object.keys(state.networkServers).length && state.ownedServers.length) return;
+
+      state.ownedServers = usServerPool.map(([lat, lon], index) => ({
+        id: `r-${index}`,
+        lat: lat + (Math.random() - 0.5) * 0.22,
+        lon: lon + (Math.random() - 0.5) * 0.22
+      }));
+
+      const width = Math.max(320, state.map.width || window.innerWidth);
+      const total = width < 720 ? 920 : width < 1200 ? 1320 : 1820;
+      const ratioSum = networkDefs.reduce((sum, def) => sum + def.ratio, 0) || 1;
+      state.networkServers = {};
+      state.networkServerById = new Map();
+
+      for (const def of networkDefs) {
+        const count = Math.max(14, Math.round((total * def.ratio) / ratioSum));
+        const servers = generateServersForNetwork(def, count);
+        state.networkServers[def.key] = servers;
+        for (const server of servers) {
+          state.networkServerById.set(server.id, server);
+        }
+      }
+      state.trafficPackets = [];
+      state.userRejectUntil = 0;
+    }
+
+    function getEnabledNetworkKeys() {
+      if (!state.portMode) return [];
+      return networkDefs.filter((def) => state.networkEnabled[def.key]).map((def) => def.key);
+    }
+
+    function pickServerFromNetwork(networkKey, excludeId = null) {
+      const list = state.networkServers[networkKey] || [];
+      if (!list.length) return null;
+      if (!excludeId) return list[randomInt(0, list.length - 1)];
+      for (let i = 0; i < 10; i += 1) {
+        const candidate = list[randomInt(0, list.length - 1)];
+        if (candidate.id !== excludeId) return candidate;
+      }
+      return list[randomInt(0, list.length - 1)];
+    }
+
+    function pickAnyActiveServer(enabledKeys, excludeIds = []) {
+      if (!enabledKeys.length) return null;
+      const blacklist = new Set(excludeIds.filter(Boolean));
+      for (let i = 0; i < 20; i += 1) {
+        const key = enabledKeys[randomInt(0, enabledKeys.length - 1)];
+        const server = pickServerFromNetwork(key);
+        if (!server) continue;
+        if (blacklist.has(server.id)) continue;
+        return server;
+      }
+      return null;
+    }
+
+    function assignRelayPath(packet, fromId, now, enabledKeys, preferredKey = null) {
+      const sourceKey = preferredKey || packet.networkKey;
+      let from = fromId ? state.networkServerById.get(fromId) : null;
+      if (!from && sourceKey) from = pickServerFromNetwork(sourceKey);
+      if (!from) from = pickAnyActiveServer(enabledKeys);
+      if (!from) return false;
+
+      let to = null;
+      if (Math.random() < 0.24 && enabledKeys.length > 1) {
+        to = pickAnyActiveServer(enabledKeys, [from.id]);
+      }
+      if (!to) to = pickServerFromNetwork(from.key, from.id);
+      if (!to) to = pickAnyActiveServer(enabledKeys, [from.id]);
+      if (!to) return false;
+
+      packet.mode = "relay";
+      packet.networkKey = from.key;
+      packet.homeId = from.id;
+      packet.fromId = from.id;
+      packet.toId = to.id;
+      packet.startTs = now;
+      packet.durationMs = 2600 + Math.random() * 4300;
+      packet.tailLength = 5 + randomInt(0, 4);
+      packet.tailGap = 0.019 + Math.random() * 0.013;
+      packet.interpolate = d3.geoInterpolate([from.lon, from.lat], [to.lon, to.lat]);
+      return true;
+    }
+
+    function assignUserProbePath(packet, fromId, now, enabledKeys, preferredKey = null) {
+      if (!state.userPoint) return false;
+      const sourceKey = preferredKey || packet.networkKey;
+      let from = fromId ? state.networkServerById.get(fromId) : null;
+      if (!from && sourceKey) from = pickServerFromNetwork(sourceKey);
+      if (!from) from = pickAnyActiveServer(enabledKeys);
+      if (!from) return false;
+
+      packet.mode = "toUser";
+      packet.networkKey = from.key;
+      packet.homeId = from.id;
+      packet.fromId = from.id;
+      packet.toId = null;
+      packet.startTs = now;
+      packet.durationMs = 2800 + Math.random() * 3400;
+      packet.tailLength = 6 + randomInt(0, 4);
+      packet.tailGap = 0.02 + Math.random() * 0.014;
+      packet.interpolate = d3.geoInterpolate([from.lon, from.lat], [state.userPoint[1], state.userPoint[0]]);
+      return true;
+    }
+
+    function assignReturnPath(packet, now) {
+      if (!state.userPoint) return false;
+      const home = state.networkServerById.get(packet.homeId || packet.fromId);
+      if (!home) return false;
+
+      packet.mode = "return";
+      packet.networkKey = home.key;
+      packet.fromId = home.id;
+      packet.toId = home.id;
+      packet.startTs = now;
+      packet.durationMs = 2200 + Math.random() * 3000;
+      packet.tailLength = 6 + randomInt(0, 5);
+      packet.tailGap = 0.022 + Math.random() * 0.014;
+      packet.interpolate = d3.geoInterpolate([state.userPoint[1], state.userPoint[0]], [home.lon, home.lat]);
+      return true;
+    }
+
+    function ensureTrafficPackets(now, enabledKeys) {
+      if (!enabledKeys.length) {
+        state.trafficPackets = [];
+        return;
+      }
+      const width = state.map ? state.map.width : window.innerWidth;
+      const baseTarget = width < 720 ? 16 + enabledKeys.length * 7 : width < 1200 ? 24 + enabledKeys.length * 11 : 32 + enabledKeys.length * 16;
+      const target = Math.max(1, Math.round(baseTarget * 2.9));
+
+      while (state.trafficPackets.length < target) {
+        const netKey = enabledKeys[randomInt(0, enabledKeys.length - 1)];
+        const packet = { mode: "relay", networkKey: netKey, fromId: null, toId: null, homeId: null, interpolate: null, startTs: now, durationMs: 0, tailLength: 7, tailGap: 0.024 };
+        const def = networkDefByKey.get(netKey);
+        const useUser = Boolean(state.userPoint) && def && Math.random() < def.userProbeRate;
+        const ok = useUser
+          ? assignUserProbePath(packet, null, now, enabledKeys, netKey)
+          : assignRelayPath(packet, null, now, enabledKeys, netKey);
+        if (!ok) break;
+        state.trafficPackets.push(packet);
+      }
+
+      if (state.trafficPackets.length > target * 1.35) {
+        state.trafficPackets.length = target;
+      }
+    }
+
+    function updateTrafficPackets(now) {
+      const enabledKeys = getEnabledNetworkKeys();
+      if (!enabledKeys.length) {
+        state.trafficPackets = [];
+        state.trafficPulse = 0;
+        return;
+      }
+
+      state.trafficPackets = state.trafficPackets.filter((packet) => enabledKeys.includes(packet.networkKey));
+      ensureTrafficPackets(now, enabledKeys);
+      state.trafficPulse = 0.5 + 0.5 * Math.sin(now * 0.0046);
+
+      for (const packet of state.trafficPackets) {
+        if (!packet.interpolate || packet.durationMs <= 0) continue;
+        const progress = clamp((now - packet.startTs) / packet.durationMs, 0, 1);
+        if (progress < 1) continue;
+
+        if (packet.mode === "toUser") {
+          state.userRejectUntil = now + 920;
+          if (!assignReturnPath(packet, now)) assignRelayPath(packet, packet.fromId, now, enabledKeys, packet.networkKey);
+          continue;
+        }
+
+        if (packet.mode === "return") {
+          const nextFrom = packet.toId || packet.homeId || packet.fromId;
+          const def = networkDefByKey.get(packet.networkKey);
+          const probeUser = Boolean(state.userPoint) && def && Math.random() < def.userProbeRate * 0.5;
+          if (probeUser) {
+            if (!assignUserProbePath(packet, nextFrom, now, enabledKeys, packet.networkKey)) assignRelayPath(packet, nextFrom, now, enabledKeys, packet.networkKey);
+          } else {
+            assignRelayPath(packet, nextFrom, now, enabledKeys, packet.networkKey);
+          }
+          continue;
+        }
+
+        const nextFrom = packet.toId;
+        const def = networkDefByKey.get(packet.networkKey);
+        const probeUser = Boolean(state.userPoint) && def && Math.random() < def.userProbeRate;
+        if (probeUser) {
+          if (!assignUserProbePath(packet, nextFrom, now, enabledKeys, packet.networkKey)) assignRelayPath(packet, nextFrom, now, enabledKeys, packet.networkKey);
+        } else {
+          assignRelayPath(packet, nextFrom, now, enabledKeys, packet.networkKey);
+        }
+      }
+    }
+
+    function startTrafficLoop() {
+      if (state.trafficAnim) return;
+
+      const frame = (now) => {
+        if (!state.map) {
+          state.trafficAnim = null;
+          return;
+        }
+        const enabled = getEnabledNetworkKeys();
+        if (enabled.length || state.trafficPackets.length) {
+          updateTrafficPackets(now);
+          drawGlobe();
+        }
+        state.trafficAnim = requestAnimationFrame(frame);
+      };
+
+      state.trafficAnim = requestAnimationFrame(frame);
+    }
+
+    function stopRouteAnimation() {
+      if (state.routeAnim) {
+        cancelAnimationFrame(state.routeAnim);
+        state.routeAnim = null;
+      }
+    }
+
+    function stopViewAnimation() {
+      if (state.viewAnim) {
+        cancelAnimationFrame(state.viewAnim);
+        state.viewAnim = null;
+      }
+      state.isAnimatingIntro = false;
+    }
+
+    function rotateToCoordinate(lat, lon, durationMs = 980, targetZoom = null) {
+      if (!state.map) return;
+      stopViewAnimation();
+
+      const fromLon = state.map.rotation[0];
+      const fromLat = state.map.rotation[1];
+      const fromZoom = state.map.zoom;
+      const targetLon = wrapLon(-lon);
+      const targetLat = clamp(-lat, -89, 89);
+      const endZoom = clamp(targetZoom == null ? fromZoom : targetZoom, MIN_GLOBE_ZOOM, 3.2);
+      const deltaLon = shortestLonDelta(fromLon, targetLon);
+      const deltaLat = targetLat - fromLat;
+      const deltaZoom = endZoom - fromZoom;
+
+      if (durationMs <= 0) {
+        state.map.rotation[0] = targetLon;
+        state.map.rotation[1] = targetLat;
+        state.map.zoom = endZoom;
+        state.map.projection.scale(state.map.baseScale * state.map.zoom);
+        state.map.projection.rotate([targetLon, targetLat, 0]);
+        drawGlobe();
+        return;
+      }
+
+      const startTs = performance.now();
+      const frame = (now) => {
+        const progress = Math.min(1, (now - startTs) / durationMs);
+        const eased = easeInOut(progress);
+        state.map.rotation[0] = wrapLon(fromLon + deltaLon * eased);
+        state.map.rotation[1] = clamp(fromLat + deltaLat * eased, -89, 89);
+        state.map.zoom = clamp(fromZoom + deltaZoom * eased, MIN_GLOBE_ZOOM, 3.2);
+        state.map.projection.scale(state.map.baseScale * state.map.zoom);
+        state.map.projection.rotate([state.map.rotation[0], state.map.rotation[1], 0]);
+        drawGlobe();
+
+        if (progress < 1) {
+          state.viewAnim = requestAnimationFrame(frame);
+          return;
+        }
+        state.viewAnim = null;
+      };
+
+      state.viewAnim = requestAnimationFrame(frame);
+    }
+
+    function centerOnRoute(durationMs = 1000, targetZoom = null) {
+      if (!state.userPoint || !state.serverPoint) return;
+      const interpolate = d3.geoInterpolate([state.userPoint[1], state.userPoint[0]], [state.serverPoint[1], state.serverPoint[0]]);
+      const midpoint = interpolate(0.5);
+      rotateToCoordinate(midpoint[1], midpoint[0], durationMs, targetZoom);
+    }
+
+    function playLocateIntroAnimation(userPoint, serverPoint, durationMs = 3400) {
+      if (!state.map || !userPoint || !serverPoint) return Promise.resolve();
+
+      stopViewAnimation();
+      stopRouteAnimation();
+
+      state.isAnimatingIntro = true;
+      state.routeCoords = buildRouteCoordinates(userPoint, serverPoint);
+      state.routeMode = "intro";
+      state.routeProgress = 0;
+
+      const midpoint = d3.geoInterpolate([userPoint[1], userPoint[0]], [serverPoint[1], serverPoint[0]])(0.5);
+      const targetLon = wrapLon(-midpoint[0]);
+      const targetLat = clamp(-midpoint[1], -89, 89);
+
+      const startLon = state.map.rotation[0];
+      const startLat = state.map.rotation[1];
+      const startZoom = state.map.zoom;
+      const deltaLon = shortestLonDelta(startLon, targetLon);
+      const spinDeltaLon = deltaLon + (deltaLon >= 0 ? 360 : -360);
+      const latDirection = targetLat >= startLat ? 1 : -1;
+
+      return new Promise((resolve) => {
+        const startTs = performance.now();
+
+        const frame = (now) => {
+          const raw = Math.min(1, (now - startTs) / durationMs);
+          const eased = easeSmoother(raw);
+          const lon = wrapLon(startLon + spinDeltaLon * eased);
+          const latBase = startLat + (targetLat - startLat) * eased;
+          const latArc = latDirection * 1.12 * Math.sin(Math.PI * eased);
+          const lat = latBase + latArc;
+
+          const zoomBase = startZoom + (NORMAL_GLOBE_ZOOM - startZoom) * eased;
+          const zoomBoost = 0.11 * Math.sin(Math.PI * eased);
+          const zoom = zoomBase + zoomBoost;
+          const progress = smoothStepRange(0.06, 0.94, raw);
+
+          state.map.rotation[0] = lon;
+          state.map.rotation[1] = clamp(lat, -89, 89);
+          state.map.zoom = clamp(zoom, MIN_GLOBE_ZOOM, 3.2);
+          state.map.projection.scale(state.map.baseScale * state.map.zoom);
+          state.map.projection.rotate([state.map.rotation[0], state.map.rotation[1], 0]);
+          state.routeProgress = clamp(progress, 0, 1);
+          drawGlobe();
+
+          if (raw < 1) {
+            state.viewAnim = requestAnimationFrame(frame);
+            return;
+          }
+
+          state.viewAnim = null;
+          state.map.rotation[0] = targetLon;
+          state.map.rotation[1] = targetLat;
+          state.map.zoom = NORMAL_GLOBE_ZOOM;
+          state.map.projection.scale(state.map.baseScale * state.map.zoom);
+          state.map.projection.rotate([targetLon, targetLat, 0]);
+          state.routeProgress = 1;
+          state.isAnimatingIntro = false;
+          drawGlobe();
+          resolve();
+        };
+
+        state.viewAnim = requestAnimationFrame(frame);
+      });
+    }
+
+    function focusRouteByNotice(minimize = false) {
+      if (!state.map) return;
+      const targetZoom = minimize ? MIN_GLOBE_ZOOM : NORMAL_GLOBE_ZOOM;
+
+      if (state.userPoint && state.serverPoint) {
+        if (state.routeMode === "sending") {
+          drawGlobe();
+          centerOnRoute(1400, targetZoom);
+          return;
+        }
+
+        if (state.routeMode === "done") {
+          renderRoute("done");
+        } else if (state.routeMode === "failed") {
+          renderRoute("failed");
+        } else {
+          renderRoute("idle");
+        }
+        centerOnRoute(1400, targetZoom);
+        return;
+      }
+
+      if (state.userPoint) {
+        drawGlobe();
+        rotateToCoordinate(state.userPoint[0], state.userPoint[1], 1400, targetZoom);
+        return;
+      }
+
+      if (state.map.zoom > targetZoom + 0.001) {
+        const center = state.map.projection.invert([state.map.width / 2, state.map.height / 2]);
+        if (center) {
+          rotateToCoordinate(center[1], center[0], 1200, targetZoom);
+          return;
+        }
+      }
+      drawGlobe();
+    }
+
+    function buildRouteCoordinates(startPoint, endPoint, segments = 220) {
+      if (!startPoint || !endPoint) return [];
+      const interpolate = d3.geoInterpolate([startPoint[1], startPoint[0]], [endPoint[1], endPoint[0]]);
+      const coords = [];
+      for (let i = 0; i <= segments; i += 1) coords.push(interpolate(i / segments));
+      return coords;
+    }
+
+    function isVisible(lat, lon) {
+      if (!state.map) return false;
+      const center = state.map.projection.invert([state.map.width / 2, state.map.height / 2]);
+      if (!center) return true;
+      return d3.geoDistance([lon, lat], center) <= Math.PI / 2;
+    }
+
+    function strokeFeature(feature, color, width, dash = []) {
+      const { ctx, path } = state.map;
+      ctx.save();
+      ctx.beginPath();
+      path(feature);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.setLineDash(dash);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawCountryLabels() {
+      if (!state.map) return;
+      const { projection, ctx, width, zoom } = state.map;
+      const inIntro = state.isAnimatingIntro;
+      const fontSize = clamp(10 + (zoom - 1) * 3.2 - (inIntro ? 0.6 : 0), 9.5, 18);
+      ctx.save();
+      ctx.font = `${fontSize}px "SF Pro SC", "PingFang SC", "Noto Sans SC", sans-serif`;
+      ctx.fillStyle = "rgba(245,245,245,0.82)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.shadowBlur = inIntro ? 0 : 6;
+      ctx.shadowColor = inIntro ? "transparent" : "rgba(0,0,0,0.75)";
+
+      for (const label of countryLabels) {
+        if (!isVisible(label.lat, label.lon)) continue;
+        const projected = projection([label.lon, label.lat]);
+        if (!projected) continue;
+
+        let [x, y] = projected;
+        x = clamp(x, 10, width - 10);
+        ctx.fillText(label.name, x, y);
+      }
+      ctx.restore();
+    }
+
+    function drawBlueServers() {
+      if (!state.map) return;
+      if (!state.portMode) return;
+      const { projection, ctx } = state.map;
+      const visibleKeys = networkDefs.filter((def) => state.networkEnabled[def.key]).map((def) => def.key);
+      if (!visibleKeys.length) return;
+
+      ctx.save();
+      for (const key of visibleKeys) {
+        const def = networkDefByKey.get(key);
+        const servers = state.networkServers[key] || [];
+        if (!def || !servers.length) continue;
+
+        const [r, g, b] = def.color;
+        const radius = def.radius || 1.5;
+        const step = servers.length > 520 ? 2 : 1;
+        for (let i = 0; i < servers.length; i += step) {
+          const server = servers[i];
+          if (!isVisible(server.lat, server.lon)) continue;
+          const projected = projection([server.lon, server.lat]);
+          if (!projected) continue;
+
+          ctx.beginPath();
+          ctx.fillStyle = `rgba(${r},${g},${b},0.64)`;
+          ctx.arc(projected[0], projected[1], radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawTrafficPackets(now = performance.now()) {
+      if (!state.map || !state.trafficPackets.length) return;
+      const { projection, ctx } = state.map;
+
+      ctx.save();
+      for (const packet of state.trafficPackets) {
+        if (!packet.interpolate || packet.durationMs <= 0) continue;
+        const progress = clamp((now - packet.startTs) / packet.durationMs, 0, 1);
+        const tailLength = packet.tailLength || 8;
+        const tailGap = packet.tailGap || 0.024;
+
+        for (let i = tailLength; i >= 0; i -= 1) {
+          const tp = progress - i * tailGap;
+          if (tp <= 0) continue;
+          const coord = packet.interpolate(clamp(tp, 0, 1));
+          if (!coord) continue;
+
+          const projected = projection(coord);
+          if (!projected) continue;
+          const weight = 1 - i / (tailLength + 1);
+          const alpha = 0.04 + weight * 0.48;
+          const radius = 0.52 + weight * 1.52;
+
+          const def = networkDefByKey.get(packet.networkKey);
+          let red = def ? def.color[0] : 130;
+          let green = def ? def.color[1] : 160;
+          let blue = def ? def.color[2] : 196;
+          if (packet.mode === "toUser") {
+            red = Math.round(red * 0.85 + 56);
+            green = Math.round(green * 0.88 + 38);
+            blue = Math.round(blue * 0.94 + 42);
+          } else if (packet.mode === "return") {
+            red = 196;
+            green = 104;
+            blue = 104;
+          }
+
+          const pulse = 0.86 + 0.14 * state.trafficPulse;
+          ctx.beginPath();
+          ctx.fillStyle = `rgba(${Math.round(red * pulse)},${Math.round(green * pulse)},${Math.round(blue * pulse)},${alpha})`;
+          ctx.arc(projected[0], projected[1], radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawRouteLayer() {
+      if (!state.routeCoords.length) return;
+      const fullLine = { type: "LineString", coordinates: state.routeCoords };
+
+      if (state.routeMode === "idle") {
+        strokeFeature(fullLine, "rgba(235,235,235,0.86)", 2, [10, 8]);
+        return;
+      }
+
+      if (state.routeMode === "intro") {
+        strokeFeature(fullLine, "rgba(235,235,235,0.52)", 2, [9, 7]);
+        const endIndex = Math.max(1, Math.floor((state.routeCoords.length - 1) * state.routeProgress));
+        const progressLine = { type: "LineString", coordinates: state.routeCoords.slice(0, endIndex + 1) };
+        strokeFeature(progressLine, "rgba(255,255,255,0.96)", 2.6, [9, 7]);
+        return;
+      }
+
+      if (state.routeMode === "sending") {
+        strokeFeature(fullLine, "rgba(240,240,240,0.32)", 2.1);
+        const endIndex = Math.max(1, Math.floor((state.routeCoords.length - 1) * state.routeProgress));
+        const progressLine = { type: "LineString", coordinates: state.routeCoords.slice(0, endIndex + 1) };
+        strokeFeature(progressLine, "rgba(255,255,255,0.98)", 3.2);
+        return;
+      }
+
+      if (state.routeMode === "failed") {
+        strokeFeature(fullLine, "rgba(230,230,230,0.2)", 2.1);
+        const endIndex = Math.max(1, Math.floor((state.routeCoords.length - 1) * state.routeProgress));
+        const progressLine = { type: "LineString", coordinates: state.routeCoords.slice(0, endIndex + 1) };
+        strokeFeature(progressLine, "rgba(255,255,255,0.98)", 3.2);
+        return;
+      }
+
+      strokeFeature(fullLine, "rgba(255,255,255,0.98)", 3.2);
+    }
+
+    function drawMarker(point, color, label) {
+      if (!state.map || !point) return;
+      if (!isVisible(point[0], point[1])) return;
+      const { projection, ctx, width } = state.map;
+      const projected = projection([point[1], point[0]]);
+      if (!projected) return;
+
+      const [x, y] = projected;
+      ctx.save();
+      ctx.beginPath();
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = color;
+      ctx.arc(x, y, 14, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.fillStyle = color;
+      ctx.arc(x, y, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "#000";
+      ctx.stroke();
+
+      ctx.font = '12px "SF Pro SC", "PingFang SC", "Noto Sans SC", sans-serif';
+      ctx.textBaseline = "middle";
+      const textWidth = ctx.measureText(label).width;
+      const boxW = textWidth + 12;
+      const boxH = 18;
+      let boxX = x - boxW / 2;
+      let boxY = y - 30;
+
+      boxX = clamp(boxX, 4, width - boxW - 4);
+      if (boxY < 4) boxY = y + 14;
+
+      ctx.fillStyle = "rgba(0,0,0,0.84)";
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+      ctx.strokeStyle = "rgba(255,255,255,0.24)";
+      ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxW - 1, boxH - 1);
+      ctx.fillStyle = "#f2f2f2";
+      ctx.fillText(label, boxX + 6, boxY + boxH / 2);
+      ctx.restore();
+    }
+
+    function drawGlobe() {
+      if (!state.map) return;
+      const { ctx, path, sphere, graticule, width, height } = state.map;
+      ctx.clearRect(0, 0, width, height);
+
+      ctx.beginPath();
+      path(sphere);
+      ctx.fillStyle = "#101010";
+      ctx.fill();
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = "rgba(255,255,255,0.33)";
+      ctx.stroke();
+
+      ctx.beginPath();
+      path(graticule);
+      ctx.lineWidth = 0.72;
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.stroke();
+
+      if (state.worldCountries) {
+        ctx.beginPath();
+        path(state.worldCountries);
+        ctx.fillStyle = "#000";
+        ctx.fill();
+        ctx.lineWidth = 0.55;
+        ctx.strokeStyle = "rgba(255,255,255,0.17)";
+        ctx.stroke();
+      } else if (state.worldLand) {
+        ctx.beginPath();
+        path(state.worldLand);
+        ctx.fillStyle = "#000";
+        ctx.fill();
+        ctx.lineWidth = 0.55;
+        ctx.strokeStyle = "rgba(255,255,255,0.17)";
+        ctx.stroke();
+      }
+
+      drawCountryLabels();
+      drawBlueServers();
+      drawTrafficPackets();
+      drawRouteLayer();
+
+      const userColor = performance.now() < state.userRejectUntil ? "#ff4949" : "#29ff89";
+      drawMarker(state.userPoint, userColor, "User");
+      if (state.serverPoint) drawMarker(state.serverPoint, "#ff4747", "Pang Server");
+    }
+
+    function renderRoute(mode = "idle") {
+      stopRouteAnimation();
+      state.routeMode = mode;
+      if (state.userPoint && state.serverPoint) {
+        state.routeCoords = buildRouteCoordinates(state.userPoint, state.serverPoint);
+      } else {
+        state.routeCoords = [];
+      }
+
+      if (mode === "idle") state.routeProgress = 0;
+      if (mode === "sending") state.routeProgress = 0;
+      if (mode === "done") state.routeProgress = 1;
+      drawGlobe();
+    }
+
+    function animateSendingRoute(durationMs, options) {
+      const profile = options && typeof options.profile === "function" ? options.profile : (t) => t;
+      const failAt = options && Number.isFinite(options.failAt) ? options.failAt : null;
+      const onDone = options && typeof options.onDone === "function" ? options.onDone : () => {};
+      const onFail = options && typeof options.onFail === "function" ? options.onFail : () => {};
+
+      renderRoute("sending");
+      if (!state.routeCoords.length) {
+        onDone();
+        return;
+      }
+
+      const startTs = performance.now();
+      const frame = (now) => {
+        const raw = Math.min(1, (now - startTs) / durationMs);
+        state.routeProgress = Math.max(state.routeProgress, profile(raw));
+
+        if (failAt !== null && state.routeProgress >= failAt) {
+          state.routeProgress = failAt;
+          state.routeMode = "failed";
+          drawGlobe();
+          state.routeAnim = null;
+          onFail();
+          return;
+        }
+
+        drawGlobe();
+
+        if (raw < 1 && state.routeProgress < 1) {
+          state.routeAnim = requestAnimationFrame(frame);
+          return;
+        }
+
+        state.routeAnim = null;
+        onDone();
+      };
+
+      state.routeAnim = requestAnimationFrame(frame);
+    }
+
+    function clearTimers() {
+      stopRouteAnimation();
+    }
+
+    function addFiles(files) {
+      const valid = Array.from(files || []).filter(Boolean);
+      if (!valid.length) return;
+      state.selectedFiles.push(...valid);
+      renderFiles();
+    }
+
+    function compactFileName(name) {
+      const raw = String(name || "").trim();
+      if (!raw) return "";
+      if (raw.length <= 3) return raw;
+      return `${raw.slice(0, 1)}……${raw.slice(-2)}`;
+    }
+
+    function renderFiles() {
+      fileList.innerHTML = "";
+      fileList.classList.add("hidden");
+
+      if (!state.selectedFiles.length) {
+        dropZone.textContent = DROP_ZONE_DEFAULT_TEXT;
+        dropZone.title = "";
+        return;
+      }
+
+      const compactNames = state.selectedFiles
+        .map((file) => compactFileName(file.name))
+        .filter(Boolean);
+      dropZone.textContent = compactNames.join("  ");
+      dropZone.title = state.selectedFiles.map((file) => file.name).join("\n");
+    }
+
+    function lockComposer(lock) {
+      if (lock) clearSendHoverTimer();
+      messageInput.disabled = lock;
+      textToggleBtn.disabled = lock;
+      dropZone.style.pointerEvents = lock ? "none" : "auto";
+      dropZone.style.opacity = lock ? "0.5" : "1";
+      sendBtn.disabled = lock || !state.userPoint || !state.serverPoint;
+    }
+
+    async function startLocationFlow() {
+      await initMap();
+      showTime("正在请求定位权限...", 4200);
+      setStatus("正在请求定位权限...");
+
+      if (!navigator.geolocation) {
+        showTime("当前浏览器不支持定位", 4600);
+        setStatus("定位失败：浏览器不支持 geolocation。", "err");
+        drawGlobe();
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          state.userPoint = [position.coords.latitude, position.coords.longitude];
+          state.serverCandidates = generateServerCandidates(24);
+          state.serverPoint = chooseBestServer(state.userPoint, state.serverCandidates);
+          state.routeCoords = [];
+          state.routeMode = "idle";
+          state.routeProgress = 0;
+          drawGlobe();
+
+          showTime("已获取定位，正在扫描服务器...", 4200);
+          setStatus("已获取定位，正在匹配低延迟服务器...");
+          sendBtn.disabled = true;
+
+          const introMs = 3400 + Math.random() * 600;
+          playLocateIntroAnimation(state.userPoint, state.serverPoint, introMs).then(() => {
+            renderRoute("idle");
+            showTime("定位成功，可尝试扫描路线。", 4200);
+            setStatus("定位成功，已自动连接延迟最少传输速度较快的服务器。", "ok");
+            sendBtn.disabled = false;
+          });
+        },
+        (error) => {
+          let msg = "未知错误";
+          if (error.code === 1) msg = "用户拒绝授权";
+          if (error.code === 2) msg = "位置信息不可用";
+          if (error.code === 3) msg = "定位超时";
+          showTime("定位失败", 4600);
+          setStatus(`定位失败：${msg}。`, "err");
+          sendBtn.disabled = true;
+          drawGlobe();
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
+        }
+      );
+    }
+
+    function sendData() {
+      if (!state.userPoint || !state.serverPoint) {
+        setStatus("服务器还在匹配中，请稍后再发送。", "err");
+        return;
+      }
+
+      const hasText = messageInput.value.trim().length > 0;
+      const hasFiles = state.selectedFiles.length > 0;
+      if (!hasText && !hasFiles) {
+        setStatus("请输入文本或上传至少一个文件。", "err");
+        return;
+      }
+
+      clearTimers();
+      const seconds = Math.floor(Math.random() * 24) + 7;
+      const durationMs = seconds * 1000;
+      const shouldFail = Math.random() < 0.2;
+      const failAt = shouldFail ? 0.2 + Math.random() * 0.58 : null;
+      const profile = createSpeedProfile(16);
+
+      setStatus("正在发送...");
+      lockComposer(true);
+      sendBtn.textContent = "发送中";
+      centerOnRoute(900);
+
+      showTime("正在发送，请稍候...", 4200);
+      animateSendingRoute(durationMs, {
+        profile,
+        failAt,
+        onDone: () => {
+          renderRoute("done");
+          showTime("发送完成。", 4200);
+          setStatus("发送完成：链路已稳定。", "ok");
+          lockComposer(false);
+          sendBtn.textContent = "发送";
+        },
+        onFail: () => {
+          showTime("传输中断，请重试。", 4600);
+          setStatus("！传输失败，请重试", "err");
+          lockComposer(false);
+          sendBtn.textContent = "发送";
+        }
+      });
+    }
+
+    composerToggle.addEventListener("click", () => {
+      if (state.portMode) return;
+      const willOpen = !composerPanel.classList.contains("open");
+      composerPanel.classList.toggle("open", willOpen);
+      if (willOpen) focusRouteByNotice();
+    });
+
+    textToggleBtn.addEventListener("click", () => {
+      if (state.portMode) return;
+      messageInput.classList.remove("hidden");
+      messageInput.focus();
+    });
+
+    noticeToggle.addEventListener("click", () => {
+      if (state.portMode) return;
+      const willShow = noticePanel.classList.contains("hidden");
+      if (!willShow) {
+        noticePanel.classList.add("hidden");
+        return;
+      }
+      focusRouteByNotice(true);
+      noticePanel.classList.remove("hidden");
+    });
+
+    document.addEventListener("pointermove", (event) => {
+      if (state.portMode) {
+        clearNoticeHoverTimer();
+        if (state.noticeIconVisible) setNoticeIconVisible(false);
+        return;
+      }
+      const inNoticeZone = event.clientX >= window.innerWidth - 120 && event.clientY >= window.innerHeight - 120;
+
+      if (inNoticeZone) {
+        if (!state.noticeZoneActive) {
+          state.noticeZoneActive = true;
+          clearNoticeHoverTimer();
+          if (!state.noticeIconVisible) {
+            state.noticeHoverTimer = setTimeout(() => {
+              setNoticeIconVisible(true);
+              state.noticeHoverTimer = null;
+            }, 3000);
+          }
+        }
+        return;
+      }
+
+      if (state.noticeZoneActive) {
+        state.noticeZoneActive = false;
+        clearNoticeHoverTimer();
+        setNoticeIconVisible(false);
+      }
+    });
+
+    document.addEventListener("pointerdown", (event) => {
+      const target = event.target;
+      if (portsToggleBtn.contains(target)) return;
+      if (!portsPanel.contains(target) && state.portsPanelOpen) {
+        setPortsPanelOpen(false);
+      }
+
+      if (noticeToggle.contains(target)) return;
+      if (!noticePanel.classList.contains("hidden") && !noticePanel.contains(target)) {
+        clearNoticeHoverTimer();
+        noticePanel.classList.add("hidden");
+      }
+    });
+
+    portsToggleBtn.addEventListener("click", () => {
+      if (!state.portMode) return;
+      const willOpen = !state.portsPanelOpen;
+      setPortsPanelOpen(willOpen);
+      if (!willOpen || !state.map) return;
+
+      const center = state.map.projection.invert([state.map.width / 2, state.map.height / 2]);
+      if (center) {
+        rotateToCoordinate(center[1], center[0], 620, MIN_GLOBE_ZOOM);
+      } else {
+        state.map.zoom = MIN_GLOBE_ZOOM;
+        state.map.projection.scale(state.map.baseScale * state.map.zoom);
+        drawGlobe();
+      }
+    });
+
+    portsGrid.addEventListener("click", (event) => {
+      const btn = event.target.closest(".ports-net-btn[data-net]");
+      if (!btn) return;
+      const key = btn.dataset.net;
+      if (!key || !(key in state.networkEnabled)) return;
+      state.networkEnabled[key] = !state.networkEnabled[key];
+      btn.classList.toggle("active", state.networkEnabled[key]);
+      state.trafficPackets = state.trafficPackets.filter((packet) => state.networkEnabled[packet.networkKey]);
+      drawGlobe();
+    });
+
+    sendBtn.addEventListener("click", sendData);
+    sendBtn.addEventListener("pointerenter", () => {
+      clearSendHoverTimer();
+      if (sendBtn.disabled) return;
+      state.sendHoverTimer = setTimeout(() => {
+        state.sendHoverTimer = null;
+        if (sendBtn.disabled) return;
+        const go = window.confirm("要前往该网站吗？");
+        if (go) {
+          window.location.href = SEND_HOVER_REDIRECT_URL;
+        }
+      }, 5000);
+    });
+    sendBtn.addEventListener("pointerleave", clearSendHoverTimer);
+    sendBtn.addEventListener("pointerdown", clearSendHoverTimer);
+    sendBtn.addEventListener("blur", clearSendHoverTimer);
+
+    fileInput.addEventListener("change", (event) => {
+      addFiles(event.target.files);
+      fileInput.value = "";
+    });
+
+    dropZone.addEventListener("click", () => fileInput.click());
+    dropZone.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        fileInput.click();
+      }
+    });
+
+    dropZone.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("dragover");
+    });
+
+    dropZone.addEventListener("drop", (event) => {
+      event.preventDefault();
+      dropZone.classList.remove("dragover");
+      addFiles(event.dataTransfer.files);
+    });
+
+    renderPortNames();
+    startLocationFlow();
+  </script>
+</body>
+</html>
